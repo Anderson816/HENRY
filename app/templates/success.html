@@ -1,0 +1,10 @@
+<!-- app/templates/success.html -->{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="text-center p-5 shadow rounded bg-white">
+    <img src="{{ url_for('static', filename='images/Siddaramaiah.png') }}" alt="Success" class="img-fluid mb-4" style="max-width: 200px;">
+    <h2 class="text-success">{{ _('Verification Successful!') }}</h2>
+    <p class="mt-3">{{ _('Thank you for submitting your details. You are eligible under the Yuva Nidhi Scheme.') }}</p>
+</div>
+{% endblock %}

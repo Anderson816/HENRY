@@ -1,0 +1,27 @@
+<!-- app/templates/status.html -->{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="text-center">
+    <h3 class="mb-3">{{ _('Scan & Pay to Complete Verification') }}</h3>
+    <img src="{{ url_for('static', filename='images/upi.png') }}" alt="UPI QR Code" class="img-fluid mb-3" style="max-width:300px;">
+    <p class="text-muted">{{ _('Your submission ID is') }} <strong>{{ submission_id }}</strong></p>
+    <div id="loader">
+        <img src="{{ url_for('static', filename='images/loading.gif') }}" alt="Loading...">
+        <p class="mt-2">{{ _('Waiting for payment confirmation...') }}</p>
+    </div>
+</div>
+<script>
+const submissionId = {{ submission_id }};
+const interval = setInterval(() => {
+    fetch(`/api/check_status/${submissionId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.paid) {
+                clearInterval(interval);
+                window.location.href = '/success';
+            }
+        });
+}, 3000);
+</script>
+{% endblock %}
