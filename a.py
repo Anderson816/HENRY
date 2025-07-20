@@ -1,66 +1,35 @@
-import time
-import json
-import random
-import string
-import re
-
+import time, json, random, string, re
 import undetected_chromedriver.v2 as uc
 from selenium.webdriver.common.by import By
 
-def generate_username():
-    return "user" + ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+def random_username():
+    return "gh" + ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
 
-USERNAME = generate_username()
-PASSWORD = "StrongP@ssw0rd123"
-EMAIL = None  # to be filled after scraping from temp-mail.org
+USERNAME = random_username()
+PASSWORD = "Str0ngP@ssw0rd123!"
+EMAIL = None  # Will be fetched from temp-mail
 
-# === Init Selenium ===
 def create_browser():
     options = uc.ChromeOptions()
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--start-maximized")
+    options.add_argument("--headless=new")  # For VPS
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-blink-features=AutomationControlled")
     return uc.Chrome(options=options)
 
-# === Get Temp Mail ===
 def get_temp_mail(driver):
+    print("🌐 Fetching temp mail address...")
     driver.get("https://temp-mail.org/en/")
     time.sleep(5)
-    email_elem = driver.find_element(By.ID, "mail")
-    email = email_elem.get_attribute("value")
-    print(f"📨 Temp mail: {email}")
-    return email
+    email_input = driver.find_element(By.ID, "mail")
+    temp_email = email_input.get_attribute("value")
+    print(f"📨 Temp email: {temp_email}")
+    return temp_email
 
-# === Wait for GitHub email and extract 6-digit code ===
-def wait_for_github_email(driver):
-    print("📥 Waiting for GitHub email...")
-    for _ in range(60):  # Wait up to 2 minutes
-        time.sleep(3)
-        driver.refresh()
-        time.sleep(3)
-        try:
-            emails = driver.find_elements(By.CSS_SELECTOR, ".inbox-dataList li")
-            for mail in emails:
-                if "GitHub" in mail.text:
-                    mail.click()
-                    time.sleep(3)
-                    body_frame = driver.find_element(By.ID, "iframeMail")
-                    driver.switch_to.frame(body_frame)
-                    body_text = driver.find_element(By.TAG_NAME, "body").text
-                    driver.switch_to.default_content()
-                    match = re.search(r"\b\d{6}\b", body_text)
-                    if match:
-                        code = match.group(0)
-                        print(f"✅ Verification code: {code}")
-                        return code
-        except Exception as e:
-            pass
-    print("❌ Timeout: GitHub email not received.")
-    return None
-
-# === GitHub Signup ===
 def github_signup(driver, email):
-    print(f"\n🚀 Signing up GitHub as {USERNAME}")
+    print(f"🚀 Creating GitHub account: {USERNAME}")
     driver.execute_script("window.open('');")
     driver.switch_to.window(driver.window_handles[1])
     driver.get("https://github.com/join")
@@ -72,54 +41,75 @@ def github_signup(driver, email):
     time.sleep(1)
 
     driver.find_element(By.XPATH, "//button[contains(text(),'Continue')]").click()
-    time.sleep(5)
+    time.sleep(6)
 
-    code = wait_for_github_email(driver.switch_to.window(driver.window_handles[0]) or driver)
-    if not code:
-        driver.quit()
-        return False
+    print("📥 Waiting for GitHub email...")
+    driver.switch_to.window(driver.window_handles[0])
+    for _ in range(60):
+        time.sleep(3)
+        driver.refresh()
+        try:
+            inbox_list = driver.find_elements(By.CSS_SELECTOR, ".inbox-dataList li")
+            for mail in inbox_list:
+                if "GitHub" in mail.text:
+                    mail.click()
+                    time.sleep(3)
+                    iframe = driver.find_element(By.ID, "iframeMail")
+                    driver.switch_to.frame(iframe)
+                    body = driver.find_element(By.TAG_NAME, "body").text
+                    driver.switch_to.default_content()
+                    match = re.search(r"\b\d{6}\b", body)
+                    if match:
+                        code = match.group(0)
+                        print(f"✅ GitHub code received: {code}")
+                        driver.switch_to.window(driver.window_handles[1])
+                        driver.find_element(By.ID, "email-verification-code-input").send_keys(code)
+                        driver.find_element(By.XPATH, "//button[contains(text(),'Verify')]").click()
+                        time.sleep(5)
+                        return True
+        except Exception:
+            continue
+    print("❌ GitHub email code not found.")
+    return False
 
-    driver.switch_to.window(driver.window_handles[1])
-    driver.find_element(By.ID, "email-verification-code-input").send_keys(code)
-    driver.find_element(By.XPATH, "//button[contains(text(),'Verify')]").click()
-    time.sleep(5)
-    print("✅ GitHub account created & verified")
-    return True
+def github_login(driver):
+    print("🔐 Logging into GitHub...")
+    driver.get("https://github.com/login")
+    time.sleep(2)
+    driver.find_element(By.ID, "login_field").send_keys(EMAIL)
+    driver.find_element(By.ID, "password").send_keys(PASSWORD)
+    driver.find_element(By.NAME, "commit").click()
+    time.sleep(3)
 
-# === Railway Signup ===
 def railway_signup(driver):
     print("🚉 Signing into Railway with GitHub...")
     driver.get("https://railway.app/login")
     time.sleep(3)
     driver.find_element(By.XPATH, "//button[contains(text(),'Continue with GitHub')]").click()
     time.sleep(6)
-
     try:
         if "Authorize Railway" in driver.page_source:
             driver.find_element(By.NAME, "authorize").click()
             time.sleep(3)
-    except:
+    except Exception:
         pass
-
     print("✅ Railway account created and logged in!")
 
-# === Save Cookies ===
 def save_cookies(driver):
     cookies = driver.get_cookies()
     with open("cookies.json", "w") as f:
         json.dump(cookies, f)
     print("💾 Cookies saved to cookies.json")
 
-# === Main ===
 if __name__ == "__main__":
     driver = create_browser()
     EMAIL = get_temp_mail(driver)
 
-    success = github_signup(driver, EMAIL)
-    if success:
-        driver.get("https://github.com/login")
-        time.sleep(3)
+    if github_signup(driver, EMAIL):
+        github_login(driver)
         railway_signup(driver)
         save_cookies(driver)
+    else:
+        print("❌ GitHub signup failed.")
 
     driver.quit()
